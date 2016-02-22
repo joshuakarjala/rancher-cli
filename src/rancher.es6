@@ -32,12 +32,21 @@ export default class RancherClient {
     debug(json`rancher client inited with ${arguments[0]}`);
   }
 
-  exec(cmd) {
+  exec(cmd, cb) {
     const url = `${this.address}/v1/projects/${this.projectId}`;
     const args = `--access-key ${this.auth.accessKey} --secret-key ${this.auth.secretKey} --url ${url}`.split(/\s+/g).concat(cmd.split(/\s+/g)).filter((a)=>a);
     info(`executing ${RANCHER_BINARY_PATH} ${args.join(' ')}`);
 
-    spawnSync(RANCHER_BINARY_PATH, args, {env: process.env, stdio: 'inherit'});
+    const rc = spawn(RANCHER_BINARY_PATH, args, {env: process.env, stdio: 'inherit'});
+    rc.stdout.on('data', (data) => {
+      console.log(`stdout: ${data}`);
+    });
+
+    rc.stderr.on('data', (data) => {
+      console.log(`stderr: ${data}`);
+    });
+
+    if (cb !== undefined) rc.on('close', cb);
   }
 
   async request(options) {
@@ -104,9 +113,9 @@ export default class RancherClient {
     stack,
     rancherComposeFile,
     dockerComposeFile,
-  }) {
+  }, cb) {
     info('invoking up', stack);
-    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d`);
+    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d`, cb);
   }
 
   async update({
