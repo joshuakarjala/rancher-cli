@@ -5,7 +5,9 @@ import $url from 'url';
 import {info, debug, error} from './log';
 import {json} from './helpers';
 import path from 'path';
-import {execSync, execFileSync, spawnSync} from 'child_process';
+import {execSync, execFileSync} from 'child_process';
+import {createWorker} from 'spawn-async';
+import {createLogger} from 'bunyan';
 import fs from 'fs';
 import B from 'bluebird';
 import WebSocket from 'ws';
@@ -34,19 +36,24 @@ export default class RancherClient {
 
   exec(cmd, cb) {
     const url = `${this.address}/v1/projects/${this.projectId}`;
-    const args = `--access-key ${this.auth.accessKey} --secret-key ${this.auth.secretKey} --url ${url}`.split(/\s+/g).concat(cmd.split(/\s+/g)).filter((a)=>a);
+    let args = `--access-key ${this.auth.accessKey} --secret-key ${this.auth.secretKey} --url ${url}`.split(/\s+/g).concat(cmd.split(/\s+/g)).filter((a)=>a);
     info(`executing ${RANCHER_BINARY_PATH} ${args.join(' ')}`);
 
-    const rc = spawn(RANCHER_BINARY_PATH, args, {env: process.env, stdio: 'inherit'});
-    rc.stdout.on('data', (data) => {
-      console.log(`stdout: ${data}`);
-    });
+    args = [RANCHER_BINARY_PATH].concat(args);
 
-    rc.stderr.on('data', (data) => {
-      console.log(`stderr: ${data}`);
+    const worker = createWorker({ 'log': createLogger({name: 'rancher-cli'}) });
+    worker.aspawn(args, {env: process.env},
+    function (err, stdout, stderr) {
+        if (err) {
+            console.log('error: %s', err.message);
+            console.error(stderr);
+            cb(err);
+        } else {
+            console.log(stdout);
+            worker.destroy()
+            cb();
+        }
     });
-
-    if (cb !== undefined) rc.on('close', cb);
   }
 
   async request(options) {
@@ -82,17 +89,17 @@ export default class RancherClient {
     this._throwNotImplemented();
   }
 
-  async scale({stack, service, scale, dockerComposeFile}) {
+  async scale({stack, service, scale, dockerComposeFile}, cb) {
     info('invoking scale', stack, service, scale);
-    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} -p ${stack} scale ${service}=${scale}`);
+    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} -p ${stack} scale ${service}=${scale}`, cb);
   }
 
   async create({
     stack,
     rancherComposeFile,
     dockerComposeFile,
-  }) {
-    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d`);
+  }, cb) {
+    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d`, cb);
   }
 
   async compose(cmd, {
@@ -100,13 +107,13 @@ export default class RancherClient {
     rancherComposeFile,
     dockerComposeFile,
     forceUpdate, confirmUpdate, update, pull
-    }) {
+    }, cb) {
     const args = [];
     pull && args.push('--pull');
     forceUpdate && args.push('--force-recreate');
     update && args.push('--force-upgrade');
     confirmUpdate && args.push('--confirm-upgrade');
-    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d ${args.join(' ')}`);
+    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d ${args.join(' ')}`, cb);
   }
 
   async up({
@@ -123,9 +130,9 @@ export default class RancherClient {
     service,
     rancherComposeFile,
     dockerComposeFile,
-  }) {
+  }, cb) {
     info('invoking update', stack, service);
-    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d`);
+    this.exec(`-f ${dockerComposeFile || 'docker-compose.yml'} ${rancherComposeFile ? '-r '+rancherComposeFile : ''} -p ${stack} up -d`, cb);
     //debug(`looking for a service: ${stack}/${service}`);
     //const serviceInfo = await this.getService({stack, service});
     //if (serviceInfo && ['removed', 'purged'].indexOf(serviceInfo.state) < 0) {

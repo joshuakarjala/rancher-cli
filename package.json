@@ -1,7 +1,7 @@
 {
-  "name": "rancher-cli",
-  "version": "0.1.5",
-  "description": "Rancher CLI interface",
+  "name": "rancher-cli-async",
+  "version": "0.1.7",
+  "description": "Rancher CLI interface (async)",
   "preferGlobal": "true",
   "bin": {
     "rancher": "./bin/rancher.js"
@@ -16,10 +16,12 @@
     "axios": "^0.7.0",
     "babel-runtime": "^5.8.33",
     "bluebird": "^3.3.1",
+    "bunyan": "^1.7.0",
     "commander": "^2.9.0",
     "inquirer": "^0.11.0",
     "lodash": "^3.10.1",
     "rancher-compose-extra": "^0.1.2",
+    "spawn-async": "0.0.1",
     "string-table": "^0.1.5",
     "tmp": "0.0.28",
     "ws": "^1.0.1"
